@@ -244,20 +244,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "embassy-pico"
-version = "0.1.0"
-dependencies = [
- "cortex-m",
- "cortex-m-rt",
- "defmt",
- "defmt-rtt",
- "embassy-executor",
- "embassy-rp",
- "embassy-time",
- "panic-probe",
-]
-
-[[package]]
 name = "embassy-rp"
 version = "0.1.0"
 source = "git+https://github.com/embassy-rs/embassy#a3ecf5caf614e17b2e1cb3d1f79d8313f2e71a63"
@@ -535,6 +521,20 @@ name = "paste"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
+
+[[package]]
+name = "pico-chess-clock"
+version = "0.1.0"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "defmt",
+ "defmt-rtt",
+ "embassy-executor",
+ "embassy-rp",
+ "embassy-time",
+ "panic-probe",
+]
 
 [[package]]
 name = "pin-project-lite"
