@@ -48,13 +48,16 @@ async fn button_watcher(
 
 #[embassy_executor::task]
 async fn output_manager(
-    mut led: Output<'static, peripherals::PIN_25>,
+    mut red_led: Output<'static, peripherals::PIN_16>,
+    mut blue_led: Output<'static, peripherals::PIN_17>,
     receiver: Receiver<'static, CriticalSectionRawMutex, ButtonEvent, 1>,
 ) {
     loop {
         match receiver.recv().await {
-            ButtonEvent::Pressed(_) => led.set_high(),
-            ButtonEvent::Released(_) => led.set_low(),
+            ButtonEvent::Pressed(Button::Red) => red_led.set_high(),
+            ButtonEvent::Released(Button::Red) => red_led.set_low(),
+            ButtonEvent::Pressed(Button::Blue) => blue_led.set_high(),
+            ButtonEvent::Released(Button::Blue) => blue_led.set_low(),
         }
     }
 }
@@ -62,7 +65,8 @@ async fn output_manager(
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
-    let led = Output::new(p.PIN_25, Level::Low);
+    let red_led = Output::new(p.PIN_16, Level::Low);
+    let blue_led = Output::new(p.PIN_17, Level::Low);
     let red_button = Input::new(p.PIN_15.degrade(), Pull::Down);
     let blue_button = Input::new(p.PIN_14.degrade(), Pull::Down);
     let sender = CHANNEL.sender();
@@ -74,5 +78,7 @@ async fn main(spawner: Spawner) {
     spawner
         .spawn(button_watcher(blue_button, Button::Blue, sender.clone()))
         .unwrap();
-    spawner.spawn(output_manager(led, receiver)).unwrap();
+    spawner
+        .spawn(output_manager(red_led, blue_led, receiver))
+        .unwrap();
 }
