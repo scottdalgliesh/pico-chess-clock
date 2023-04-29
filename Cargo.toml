@@ -23,6 +23,9 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 cortex-m = { version = "0.7.6" }
 cortex-m-rt = "0.7.0"
 
+hd44780-driver = "0.4.0"
+strum_macros = "0.24"
+
 [patch.crates-io]
 embassy-executor = { git = "https://github.com/embassy-rs/embassy" }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy" }
