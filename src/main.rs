@@ -21,6 +21,7 @@ enum ButtonEvent {
 #[derive(Clone, Copy, Format)]
 enum Button {
     Red,
+    Yellow,
     Blue,
 }
 
@@ -28,7 +29,7 @@ static CHANNEL: Channel<CriticalSectionRawMutex, ButtonEvent, 1> = Channel::new(
 
 const DEBOUNCE_DELAY: u64 = 50;
 
-#[embassy_executor::task(pool_size = 2)]
+#[embassy_executor::task(pool_size = 3)]
 async fn button_watcher(
     mut button: Input<'static, AnyPin>,
     button_id: Button,
@@ -49,14 +50,23 @@ async fn button_watcher(
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
     let mut red_led = Output::new(p.PIN_16, Level::Low);
+    let mut yellow_led = Output::new(p.PIN_18, Level::Low);
     let mut blue_led = Output::new(p.PIN_17, Level::Low);
     let red_button = Input::new(p.PIN_15.degrade(), Pull::Down);
+    let yellow_button = Input::new(p.PIN_13.degrade(), Pull::Down);
     let blue_button = Input::new(p.PIN_14.degrade(), Pull::Down);
     let sender = CHANNEL.sender();
     let receiver = CHANNEL.receiver();
 
     spawner
         .spawn(button_watcher(red_button, Button::Red, sender.clone()))
+        .unwrap();
+    spawner
+        .spawn(button_watcher(
+            yellow_button,
+            Button::Yellow,
+            sender.clone(),
+        ))
         .unwrap();
     spawner
         .spawn(button_watcher(blue_button, Button::Blue, sender.clone()))
@@ -67,6 +77,8 @@ async fn main(spawner: Spawner) {
         match receiver.recv().await {
             ButtonEvent::Pressed(Button::Red) => red_led.set_high(),
             ButtonEvent::Released(Button::Red) => red_led.set_low(),
+            ButtonEvent::Pressed(Button::Yellow) => yellow_led.set_high(),
+            ButtonEvent::Released(Button::Yellow) => yellow_led.set_low(),
             ButtonEvent::Pressed(Button::Blue) => blue_led.set_high(),
             ButtonEvent::Released(Button::Blue) => blue_led.set_low(),
         }
