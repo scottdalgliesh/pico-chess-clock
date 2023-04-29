@@ -31,7 +31,7 @@ enum Button {
 
 static CHANNEL: Channel<CriticalSectionRawMutex, ButtonEvent, 1> = Channel::new();
 
-const DEBOUNCE_DELAY: u64 = 50;
+const DEBOUNCE_DELAY: u64 = 20;
 
 #[embassy_executor::task(pool_size = 3)]
 async fn button_watcher(
@@ -64,7 +64,6 @@ async fn main(spawner: Spawner) {
 
     let i2c = i2c::I2c::new_blocking(p.I2C0, p.PIN_1, p.PIN_0, Config::default());
     let mut lcd = HD44780::new_i2c(i2c, 0x27, &mut Delay).unwrap();
-    lcd.reset(&mut Delay).unwrap();
     lcd.clear(&mut Delay).unwrap();
 
     let sender = CHANNEL.sender();
@@ -88,7 +87,6 @@ async fn main(spawner: Spawner) {
     loop {
         let msg = receiver.recv().await;
         if let ButtonEvent::Pressed(button) = msg {
-            lcd.reset(&mut Delay).unwrap();
             lcd.clear(&mut Delay).unwrap();
             lcd.write_str(button.as_ref(), &mut Delay).unwrap();
         }
