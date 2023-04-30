@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 embassy-executor = { version = "0.1.0", features = ["arch-cortex-m", "executor-thread", "defmt", "integrated-timers"] }
+embassy-futures = "0.1.0"
 embassy-sync = { version = "0.2.0", features = ["defmt"] }
 embassy-time = { version = "0.1.0", features = ["defmt", "defmt-timestamp-uptime"] }
 embassy-rp = { version = "0.1.0", features = [
@@ -24,10 +25,11 @@ cortex-m = { version = "0.7.6" }
 cortex-m-rt = "0.7.0"
 
 hd44780-driver = "0.4.0"
-strum_macros = "0.24"
+heapless = { version = "0.7.16", features = ["defmt-impl"] }
 
 [patch.crates-io]
 embassy-executor = { git = "https://github.com/embassy-rs/embassy" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy" }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy" }
 embassy-time = { git = "https://github.com/embassy-rs/embassy" }
 embassy-rp = { git = "https://github.com/embassy-rs/embassy" }
