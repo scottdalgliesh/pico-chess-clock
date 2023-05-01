@@ -52,6 +52,12 @@ impl<'d, P1: Pin, P2: Pin> Game<'d, P1, P2> {
         lcd.set_cursor_pos(40, &mut Delay).unwrap();
         lcd.write_str(&buf, &mut Delay).unwrap();
     }
+
+    fn reset(&mut self) {
+        self.phase = GameStatus::PreGame;
+        self.red_player.reset();
+        self.blue_player.reset();
+    }
 }
 
 #[derive(PartialEq)]
@@ -115,6 +121,12 @@ impl<'d, P: Pin> Player<'d, P> {
             };
             self.led.set_low();
         }
+    }
+
+    fn reset(&mut self) {
+        self.time_left = Duration::from_secs(DEFAULT_TURN_MINUTES * 60);
+        self.is_active = false;
+        self.time_activated = None;
     }
 }
 
@@ -190,59 +202,73 @@ async fn main(spawner: Spawner) {
         blue_player: Player::new(blue_led),
     };
 
-    // Pre-game phase
-    while game.phase == GameStatus::PreGame {
-        game.display_string(&mut lcd);
-        match receiver.recv().await {
-            ButtonEvent::Pressed(Color::Red) => game.red_player.decrement_time(1),
-            ButtonEvent::Held(Color::Red) => game.red_player.decrement_time(5),
-            ButtonEvent::Pressed(Color::Blue) => game.blue_player.decrement_time(1),
-            ButtonEvent::Held(Color::Blue) => game.blue_player.decrement_time(5),
-            ButtonEvent::Pressed(Color::Yellow) => game.phase = GameStatus::Paused,
-            _ => (),
-        }
-    }
-
-    // game phase
-    loop {
-        // game paused
-        while game.phase == GameStatus::Paused {
-            yellow_led.set_high();
+    'outer: loop {
+        // Pre-game phase
+        while game.phase == GameStatus::PreGame {
             game.display_string(&mut lcd);
             match receiver.recv().await {
-                ButtonEvent::Pressed(Color::Red) => game.blue_player.start_turn(),
-                ButtonEvent::Pressed(Color::Blue) => game.red_player.start_turn(),
-                _ => continue,
+                ButtonEvent::Pressed(Color::Red) => game.red_player.decrement_time(1),
+                ButtonEvent::Held(Color::Red) => game.red_player.decrement_time(5),
+                ButtonEvent::Pressed(Color::Blue) => game.blue_player.decrement_time(1),
+                ButtonEvent::Held(Color::Blue) => game.blue_player.decrement_time(5),
+                ButtonEvent::Pressed(Color::Yellow) => game.phase = GameStatus::Paused,
+                _ => (),
             }
-            game.phase = GameStatus::Active;
-            yellow_led.set_low();
         }
 
-        // active turn
-        while game.phase == GameStatus::Active {
-            game.display_string(&mut lcd);
-            select(
-                async {
-                    match receiver.recv().await {
-                        ButtonEvent::Pressed(Color::Red) => {
-                            game.red_player.end_turn();
-                            game.blue_player.start_turn();
-                        }
-                        ButtonEvent::Pressed(Color::Blue) => {
-                            game.blue_player.end_turn();
-                            game.red_player.start_turn();
-                        }
-                        ButtonEvent::Pressed(Color::Yellow) => {
-                            game.red_player.end_turn();
-                            game.blue_player.end_turn();
-                            game.phase = GameStatus::Paused;
-                        }
-                        _ => (),
-                    };
-                },
-                Timer::after(Duration::from_millis(100)),
-            )
-            .await;
+        // game phase
+        loop {
+            // game paused
+            while game.phase == GameStatus::Paused {
+                yellow_led.set_high();
+                game.display_string(&mut lcd);
+                match receiver.recv().await {
+                    ButtonEvent::Pressed(Color::Red) => game.blue_player.start_turn(),
+                    ButtonEvent::Pressed(Color::Blue) => game.red_player.start_turn(),
+                    ButtonEvent::Held(Color::Yellow) => {
+                        game.reset();
+                        continue 'outer;
+                    }
+                    _ => continue,
+                }
+                game.phase = GameStatus::Active;
+                yellow_led.set_low();
+            }
+
+            // active turn
+            while game.phase == GameStatus::Active {
+                game.display_string(&mut lcd);
+                let mut game_reset_flag = false;
+                select(
+                    async {
+                        match receiver.recv().await {
+                            ButtonEvent::Pressed(Color::Red) => {
+                                game.red_player.end_turn();
+                                game.blue_player.start_turn();
+                            }
+                            ButtonEvent::Pressed(Color::Blue) => {
+                                game.blue_player.end_turn();
+                                game.red_player.start_turn();
+                            }
+                            ButtonEvent::Pressed(Color::Yellow) => {
+                                game.red_player.end_turn();
+                                game.blue_player.end_turn();
+                                game.phase = GameStatus::Paused;
+                            }
+                            ButtonEvent::Held(Color::Yellow) => {
+                                game.reset();
+                                game_reset_flag = true;
+                            }
+                            _ => (),
+                        };
+                    },
+                    Timer::after(Duration::from_millis(100)),
+                )
+                .await;
+                if game_reset_flag {
+                    continue 'outer;
+                }
+            }
         }
     }
 }
