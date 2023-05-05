@@ -68,7 +68,7 @@ enum GameStatus {
 }
 
 struct Player<'d, P: Pin> {
-    time_left: Duration,
+    millis_left: i32,
     is_active: bool,
     time_activated: Option<Instant>,
     led: Output<'d, P>,
@@ -77,30 +77,32 @@ struct Player<'d, P: Pin> {
 impl<'d, P: Pin> Player<'d, P> {
     fn new(led: Output<'d, P>) -> Player<'d, P> {
         Player {
-            time_left: Duration::from_secs(DEFAULT_TURN_MINUTES * 60),
+            millis_left: DEFAULT_TURN_MILLIS,
             is_active: false,
             time_activated: None,
             led,
         }
     }
 
-    fn decrement_time(&mut self, mins: u64) {
-        if self.time_left > Duration::from_secs(mins * 60) {
-            self.time_left -= Duration::from_secs(mins * 60);
+    fn decrement_time(&mut self, mins: i32) {
+        let millis = mins * MINS_TO_MILLIS;
+        if self.millis_left > millis {
+            self.millis_left -= millis;
         } else {
-            self.time_left = Duration::from_secs(MAX_TURN_MINUTES * 60);
+            self.millis_left = MAX_TURN_MILLIS;
         }
     }
 
     fn formatted_time(&self) -> String<32> {
-        let mut time_left = self.time_left.clone();
+        let mut millis_left = self.millis_left.clone();
         if let Some(time_activated) = self.time_activated {
-            time_left -= Instant::now().duration_since(time_activated);
+            millis_left -= Instant::now().duration_since(time_activated).as_millis() as i32;
         }
-        let mins = time_left.as_secs() / 60;
-        let secs = time_left.as_secs() % 60;
+        let sign = if millis_left < 0 { "-" } else { "" };
+        let mins = millis_left.abs() / (MINS_TO_MILLIS);
+        let secs = millis_left.abs() % (MINS_TO_MILLIS) / 1000;
         let mut buf: String<32> = String::new();
-        core::write!(&mut buf, "{:>02}:{:>02}", mins, secs).unwrap();
+        core::write!(&mut buf, "{}{:>02}:{:>02}", sign, mins, secs).unwrap();
         buf
     }
 
@@ -116,7 +118,8 @@ impl<'d, P: Pin> Player<'d, P> {
         if self.is_active {
             self.is_active = false;
             if let Some(time_activated) = self.time_activated {
-                self.time_left -= Instant::now().duration_since(time_activated);
+                self.millis_left -=
+                    Instant::now().duration_since(time_activated).as_millis() as i32;
                 self.time_activated = None;
             };
             self.led.set_low();
@@ -124,7 +127,7 @@ impl<'d, P: Pin> Player<'d, P> {
     }
 
     fn reset(&mut self) {
-        self.time_left = Duration::from_secs(DEFAULT_TURN_MINUTES * 60);
+        self.millis_left = DEFAULT_TURN_MILLIS;
         self.is_active = false;
         self.time_activated = None;
     }
@@ -133,8 +136,9 @@ impl<'d, P: Pin> Player<'d, P> {
 static CHANNEL: Channel<CriticalSectionRawMutex, ButtonEvent, 1> = Channel::new();
 
 const DEBOUNCE_DELAY_MILLIS: u64 = 20;
-const DEFAULT_TURN_MINUTES: u64 = 10;
-const MAX_TURN_MINUTES: u64 = 30;
+const MINS_TO_MILLIS: i32 = 60 * 1000;
+const DEFAULT_TURN_MILLIS: i32 = 10 * MINS_TO_MILLIS + 999; // offset by 999 millis to account for truncation
+const MAX_TURN_MILLIS: i32 = 30 * MINS_TO_MILLIS;
 const HOLD_TIME_SECS: u64 = 1;
 
 #[embassy_executor::task(pool_size = 3)]
