@@ -18,19 +18,15 @@ use gpio::{AnyPin, Input, Level, Output, Pull};
 use hd44780_driver::HD44780;
 use {defmt_rtt as _, panic_probe as _};
 
-#[derive(Clone, Copy, Format)]
-enum ButtonEvent {
-    Pressed(Color),
-    Held(Color),
-}
+static CHANNEL: Channel<CriticalSectionRawMutex, ButtonEvent, 1> = Channel::new();
 
-#[derive(Clone, Copy, Format)]
-enum Color {
-    Red,
-    Yellow,
-    Blue,
-}
+const DEBOUNCE_DELAY_MILLIS: u64 = 20;
+const MINS_TO_MILLIS: i32 = 60 * 1000;
+const DEFAULT_TURN_MILLIS: i32 = 10 * MINS_TO_MILLIS + 999; // offset by 999 millis to account for truncation
+const MAX_TURN_MILLIS: i32 = 30 * MINS_TO_MILLIS;
+const HOLD_TIME_SECS: u64 = 1;
 
+/// Controls overall game (timer) state.
 struct Game<'d, P1: Pin, P2: Pin> {
     phase: GameStatus,
     red_player: Player<'d, P1>,
@@ -38,6 +34,7 @@ struct Game<'d, P1: Pin, P2: Pin> {
 }
 
 impl<'d, P1: Pin, P2: Pin> Game<'d, P1, P2> {
+    /// Writes players' status (time remaining) to the provided LCD display.
     fn display_string<B: DataBus>(&self, lcd: &mut HD44780<B>) {
         let mut buf: String<64> = String::new();
         core::write!(
@@ -53,6 +50,7 @@ impl<'d, P1: Pin, P2: Pin> Game<'d, P1, P2> {
         lcd.write_str(&buf, &mut Delay).unwrap();
     }
 
+    /// Reset all state to initiate a new game.
     fn reset(&mut self) {
         self.phase = GameStatus::PreGame;
         self.red_player.reset();
@@ -60,13 +58,7 @@ impl<'d, P1: Pin, P2: Pin> Game<'d, P1, P2> {
     }
 }
 
-#[derive(PartialEq)]
-enum GameStatus {
-    PreGame,
-    Active,
-    Paused,
-}
-
+/// Controls individual player state.
 struct Player<'d, P: Pin> {
     millis_left: i32,
     is_active: bool,
@@ -84,6 +76,8 @@ impl<'d, P: Pin> Player<'d, P> {
         }
     }
 
+    /// Reduce total player's turn time by the specified number of minutes.
+    /// Used during the "pre-game" phase to select player time limits.
     fn decrement_time(&mut self, mins: i32) {
         let millis = mins * MINS_TO_MILLIS;
         if self.millis_left > millis {
@@ -93,6 +87,8 @@ impl<'d, P: Pin> Player<'d, P> {
         }
     }
 
+    /// Returns player's current time remaining as a formatted string.
+    /// Format: [-]MM:SS
     fn formatted_time(&self) -> String<32> {
         let mut millis_left = self.millis_left.clone();
         if let Some(time_activated) = self.time_activated {
@@ -106,6 +102,7 @@ impl<'d, P: Pin> Player<'d, P> {
         buf
     }
 
+    /// Initiate player's turn.
     fn start_turn(&mut self) {
         if !self.is_active {
             self.is_active = true;
@@ -114,6 +111,7 @@ impl<'d, P: Pin> Player<'d, P> {
         }
     }
 
+    /// End player's turn and update time remaining.
     fn end_turn(&mut self) {
         if self.is_active {
             self.is_active = false;
@@ -126,6 +124,7 @@ impl<'d, P: Pin> Player<'d, P> {
         }
     }
 
+    /// Reset player's state to initiate a new game.
     fn reset(&mut self) {
         self.millis_left = DEFAULT_TURN_MILLIS;
         self.is_active = false;
@@ -133,14 +132,30 @@ impl<'d, P: Pin> Player<'d, P> {
     }
 }
 
-static CHANNEL: Channel<CriticalSectionRawMutex, ButtonEvent, 1> = Channel::new();
+#[derive(PartialEq)]
+enum GameStatus {
+    PreGame,
+    Active,
+    Paused,
+}
 
-const DEBOUNCE_DELAY_MILLIS: u64 = 20;
-const MINS_TO_MILLIS: i32 = 60 * 1000;
-const DEFAULT_TURN_MILLIS: i32 = 10 * MINS_TO_MILLIS + 999; // offset by 999 millis to account for truncation
-const MAX_TURN_MILLIS: i32 = 30 * MINS_TO_MILLIS;
-const HOLD_TIME_SECS: u64 = 1;
+#[derive(Clone, Copy, Format)]
+enum ButtonEvent {
+    Pressed(Color),
+    Held(Color),
+}
 
+#[derive(Clone, Copy, Format)]
+enum Color {
+    Red,
+    Yellow,
+    Blue,
+}
+
+/// Embassy task to monitor a given io port for user input.
+/// Sends a message using the given sender for the following events:
+/// * button pressed (i.e. signal high; instantaneous)
+/// * button held (i.e. signal high; threshold set by const HOLD_TIME_SECS)
 #[embassy_executor::task(pool_size = 3)]
 async fn button_watcher(
     mut button: Input<'static, AnyPin>,
