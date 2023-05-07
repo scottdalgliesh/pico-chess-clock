@@ -246,6 +246,7 @@ async fn main(spawner: Spawner) {
                     ButtonEvent::Pressed(Color::Blue) => game.red_player.start_turn(),
                     ButtonEvent::Held(Color::Yellow) => {
                         game.reset();
+                        yellow_led.set_low();
                         continue 'outer;
                     }
                     _ => continue,
@@ -276,6 +277,7 @@ async fn main(spawner: Spawner) {
                             }
                             ButtonEvent::Held(Color::Yellow) => {
                                 game.reset();
+                                yellow_led.set_low();
                                 game_reset_flag = true;
                             }
                             _ => (),
