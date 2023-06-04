@@ -281,6 +281,8 @@ async fn main(spawner: Spawner) {
                                 game.phase = GameStatus::Paused;
                             }
                             ButtonEvent::Held(Color::Yellow) => {
+                                game.red_player.end_turn();
+                                game.blue_player.end_turn();
                                 game.reset();
                                 yellow_led.set_low();
                                 game_reset_flag = true;
