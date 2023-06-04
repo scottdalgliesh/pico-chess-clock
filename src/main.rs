@@ -163,24 +163,29 @@ async fn button_watcher(
     sender: Sender<'static, CriticalSectionRawMutex, ButtonEvent, 1>,
 ) {
     loop {
-        // monitor for initial button press condition
-        if button.is_low() {
-            button.wait_for_high().await;
-            sender.send(ButtonEvent::Pressed(button_id)).await;
-            Timer::after(Duration::from_millis(DEBOUNCE_DELAY_MILLIS)).await;
-        }
-
-        // monitor for button held condition
-        let time_pressed = Instant::now();
+        button.wait_for_high().await;
+        Timer::after(Duration::from_millis(DEBOUNCE_DELAY_MILLIS)).await;
         select(
-            Timer::after(Duration::from_secs(HOLD_TIME_SECS)),
-            button.wait_for_low(),
+            async {
+                button.wait_for_low().await;
+                sender.send(ButtonEvent::Pressed(button_id)).await;
+            },
+            async {
+                Timer::after(Duration::from_secs(HOLD_TIME_SECS)).await;
+                sender.send(ButtonEvent::Held(button_id)).await;
+            },
         )
         .await;
-        if Instant::now().duration_since(time_pressed).as_secs() >= HOLD_TIME_SECS {
-            sender.send(ButtonEvent::Held(button_id)).await;
-            Timer::after(Duration::from_millis(DEBOUNCE_DELAY_MILLIS)).await;
+
+        // monitor for continuous hold (repeated input)
+        while button.is_high() {
+            select(button.wait_for_low(), async {
+                Timer::after(Duration::from_secs(HOLD_TIME_SECS)).await;
+                sender.send(ButtonEvent::Held(button_id)).await;
+            })
+            .await;
         }
+        Timer::after(Duration::from_millis(DEBOUNCE_DELAY_MILLIS)).await;
     }
 }
 
