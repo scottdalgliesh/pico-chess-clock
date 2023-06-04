@@ -163,11 +163,11 @@ async fn button_watcher(
     sender: Sender<'static, CriticalSectionRawMutex, ButtonEvent, 1>,
 ) {
     loop {
-        button.wait_for_high().await;
+        button.wait_for_low().await;
         Timer::after(Duration::from_millis(DEBOUNCE_DELAY_MILLIS)).await;
         select(
             async {
-                button.wait_for_low().await;
+                button.wait_for_high().await;
                 sender.send(ButtonEvent::Pressed(button_id)).await;
             },
             async {
@@ -178,8 +178,8 @@ async fn button_watcher(
         .await;
 
         // monitor for continuous hold (repeated input)
-        while button.is_high() {
-            select(button.wait_for_low(), async {
+        while button.is_low() {
+            select(button.wait_for_high(), async {
                 Timer::after(Duration::from_secs(HOLD_TIME_SECS)).await;
                 sender.send(ButtonEvent::Held(button_id)).await;
             })
@@ -198,9 +198,9 @@ async fn main(spawner: Spawner) {
     let mut yellow_led = Output::new(p.PIN_18, Level::Low);
     let blue_led = Output::new(p.PIN_17, Level::Low);
 
-    let red_button = Input::new(p.PIN_15.degrade(), Pull::Down);
-    let yellow_button = Input::new(p.PIN_13.degrade(), Pull::Down);
-    let blue_button = Input::new(p.PIN_14.degrade(), Pull::Down);
+    let red_button = Input::new(p.PIN_15.degrade(), Pull::Up);
+    let yellow_button = Input::new(p.PIN_13.degrade(), Pull::Up);
+    let blue_button = Input::new(p.PIN_14.degrade(), Pull::Up);
 
     let i2c = i2c::I2c::new_blocking(p.I2C0, p.PIN_1, p.PIN_0, Config::default());
     let mut lcd = HD44780::new_i2c(i2c, 0x27, &mut Delay).unwrap();
