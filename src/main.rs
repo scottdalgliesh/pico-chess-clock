@@ -194,15 +194,15 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     //initialize IO
-    let red_led = Output::new(p.PIN_16, Level::Low);
-    let mut yellow_led = Output::new(p.PIN_18, Level::Low);
+    let red_led = Output::new(p.PIN_27, Level::Low);
+    let mut yellow_led = Output::new(p.PIN_21, Level::Low);
     let blue_led = Output::new(p.PIN_17, Level::Low);
 
-    let red_button = Input::new(p.PIN_15.degrade(), Pull::Up);
-    let yellow_button = Input::new(p.PIN_13.degrade(), Pull::Up);
-    let blue_button = Input::new(p.PIN_14.degrade(), Pull::Up);
+    let red_button = Input::new(p.PIN_26.degrade(), Pull::Up);
+    let yellow_button = Input::new(p.PIN_20.degrade(), Pull::Up);
+    let blue_button = Input::new(p.PIN_16.degrade(), Pull::Up);
 
-    let i2c = i2c::I2c::new_blocking(p.I2C0, p.PIN_1, p.PIN_0, Config::default());
+    let i2c = i2c::I2c::new_blocking(p.I2C0, p.PIN_9, p.PIN_8, Config::default());
     let mut lcd = HD44780::new_i2c(i2c, 0x27, &mut Delay).unwrap();
     lcd.clear(&mut Delay).unwrap();
 
